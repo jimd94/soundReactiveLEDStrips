@@ -9,7 +9,7 @@
 #define PUSHBUTTON_SELECT_PIN		4
 #define PARSEDANALOGDATA_PIN		0
 
-#define NUMOFOPTION					5
+#define NUMOFOPTION					7
 
 const float beta = 0.3;
 unsigned int currentValues[7] = {0,0,0,0,0,0,0};
@@ -101,21 +101,12 @@ void loop()
 		buttonPressedAlready = false;
 	}
 
-	if(selectionState == 0) // default sound reactive mode
+	if(selectionState == 0 || selectionState == 5 || selectionState == 6) // default sound reactive mode
 	{
 		getBandValues(currentValues);
 		calibrateBandValues(currentValues);
 		//lpfFilter(currentValues, previousValues);
 		setLEDsToAppropiateColor();
-		FastLED.show();
-		// unsigned long currentTime = millis();
-		// if(currentTime - previousTime >= interval)
-		// {
-		// 	previousTime = currentTime;
-		// 	FastLED.show();
-		// }
-		// for(int i = 0; i < NUM_LEDS; i++)
-		// 	leds[i] = CRGB::Black;	// Black
 	}
 	else if(selectionState == 1) // RED
 	{
@@ -138,12 +129,13 @@ void loop()
 			leds[i] = CRGB::White;
 	}
 
-	unsigned long currentTime = millis();
-	if(currentTime - previousTime >= interval)
-	{
-		previousTime = currentTime;
-		FastLED.show();
-	}
+	// unsigned long currentTime = millis();
+	// if(currentTime - previousTime >= interval)
+	// {
+	// 	previousTime = currentTime;
+	// 	FastLED.show();
+	// }
+	FastLED.show();
 }
 
 // 63 Hz, 160 Hz, 400 Hz denote bass range, 16 kHz denotes bells/cymbals
@@ -161,53 +153,52 @@ void setLEDsToAppropiateColor()
 	// midFrequencies  = max(midFrequencies, currentValues[4]);
 	// highFrequencies = max(currentValues[5], currentValues[6]); // max of 6.25 kHz and 16 kHz
 
-	// // if 63 Hz and 160 Hz are both saturateed (over 200), set R & G to 0, but set blue to 16 kHz to get the bells/cymbals
-	// if(currentValues[0] >= 200 && currentValues[1] >= 200)
-	// {
-	// 	Serial.println("Saturated Bass");
-	// 	redColor = 0; greenColor = 0; blueColor = currentValues[6];
-	// }
-	// else if(currentValues[0] >= 200 && currentValues[1] < 200)
-	// {
-	// 	Serial.println("Notable Highs");
-	// 	redColor = currentValues[6]; greenColor = 0; blueColor = 0;
-	// }
-	// else
-	// {
-	// 	redColor 	= currentValues[6];
-	// 	greenColor 	= currentValues[2];
-	// 	if(currentValues[0] < 25)
-	// 	{
-	// 		Serial.println("Non-Averaged");
-	// 		unsigned int mean = currentValues[1];
-	// 		blueColor	= mean;
-	// 	}
-	// 	else
-	// 	{
-	// 		unsigned int mean = (currentValues[0] + currentValues[1]) / 2;
-	// 		blueColor	= mean;
-	// 	}
-	// }
-
 	redColor 	= currentValues[5];
 	greenColor 	= currentValues[1];
 	blueColor	= currentValues[0];
 
-	// Nice RGB rainbow mode
-	for(int i = 0; i < 30; i+=3)
+	if(selectionState == 0)
 	{
-		leds[i].setRGB(redColor, 0, 0);
+		// Nice RGB rainbow mode
+		for(int i = 0; i < 30; i+=3)
+		{
+			leds[i].setRGB(redColor, 0, 0);
+		}
+		for(int i = 1; i < 30; i+=3)
+		{
+			leds[i].setRGB(0, greenColor, 0);
+		}
+		for(int i = 2; i < 30; i+=3)
+		{
+			leds[i].setRGB(0, 0, blueColor);
+		}
 	}
-	for(int i = 1; i < 30; i+=3)
+	else if(selectionState == 5)
 	{
-		leds[i].setRGB(0, greenColor, 0);
+		// only update the first LED, push the previous colors to the next LED and so on
+		static unsigned int LEDtracker = 0;
+		if(LEDtracker <= 29)
+		{
+			leds[LEDtracker++].setRGB(redColor, greenColor, blueColor);
+		}
+		else 
+		{
+			LEDtracker = 0;
+		}
 	}
-	for(int i = 2; i < 30; i+=3)
+	else if(selectionState == 6)
 	{
-		leds[i].setRGB(0, 0, blueColor);
+		// only update the first LED, push the previous colors to the next LED and so on
+		static unsigned int LEDtracker = 0;
+		if(LEDtracker <= 29)
+		{
+			leds[LEDtracker++].setRGB(redColor, 0, 0);
+		}
+		else 
+		{
+			LEDtracker = 0;
+		}
 	}
-	// for(int i = 0; i < NUM_LEDS; i++)
-	// 	leds[i].setRGB(redColor, greenColor, blueColor);
 
 	Serial.print("R: ");
 	Serial.print(redColor);
