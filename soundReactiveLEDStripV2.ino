@@ -9,17 +9,19 @@
 #define PUSHBUTTON_SELECT_PIN		4
 #define PARSEDANALOGDATA_PIN		0
 
-#define NUMOFOPTION					7
+#define NUMOFOPTION					9
 
 const float beta = 0.3;
 unsigned int currentValues[7] = {0,0,0,0,0,0,0};
-unsigned int previousValues[7] = {0,0,0,0,0,0,0};
 byte selectionState = 0, redColor, greenColor, blueColor;
-bool buttonPressedAlready = false, previousSlopeIsPositive = false;
+bool buttonPressedAlready = false;
 CRGB leds[NUM_LEDS];		// create an object named leds
 
 unsigned long previousTime = 0;
 const long interval = 200;
+
+// threshold calibration variables
+unsigned int maxValues[7] = {0,0,0,0,0,0,0};
 
 void getBandValues(unsigned int (&bands)[7])
 {
@@ -33,7 +35,7 @@ void getBandValues(unsigned int (&bands)[7])
 	{
 		digitalWrite(STROBE_PIN, LOW);
 		delayMicroseconds(37);	// to (output settle time) = 37 us for stable read
-		*(bands + i) = map(analogRead(PARSEDANALOGDATA_PIN), 0, 1023, 0, 255);
+		*(bands + i) = analogRead(PARSEDANALOGDATA_PIN);
 		delayMicroseconds(37);
 		digitalWrite(STROBE_PIN, HIGH);
 		delayMicroseconds(19);
@@ -42,35 +44,26 @@ void getBandValues(unsigned int (&bands)[7])
 
 void calibrateBandValues(unsigned int (&bands)[7])
 {
-	*(bands + 0) = constrain(	*(bands + 0), 35, 255);
-	*(bands + 0) = map(			*(bands + 0), 35, 255, 0, 255);
+	*(bands + 0) = constrain(	*(bands + 0), maxValues[0], 1023);
+	*(bands + 0) = map(			*(bands + 0), maxValues[0], 1023, 0, 255);
 
-	*(bands + 1) = constrain(	*(bands + 1), 62, 255);
-	*(bands + 1) = map(			*(bands + 1), 62, 255, 0, 255);
+	*(bands + 1) = constrain(	*(bands + 1), maxValues[1], 1023);
+	*(bands + 1) = map(			*(bands + 1), maxValues[1], 1023, 0, 255);
 
-	*(bands + 2) = constrain(	*(bands + 2), 52, 255);
-	*(bands + 2) = map(			*(bands + 2), 52, 255, 0, 255);
+	*(bands + 2) = constrain(	*(bands + 2), maxValues[2], 1023);
+	*(bands + 2) = map(			*(bands + 2), maxValues[2], 1023, 0, 255);
 
-	*(bands + 3) = constrain(	*(bands + 3), 65, 255);
-	*(bands + 3) = map(			*(bands + 3), 65, 255, 0, 255);
+	*(bands + 3) = constrain(	*(bands + 3), maxValues[3], 1023);
+	*(bands + 3) = map(			*(bands + 3), maxValues[3], 1023, 0, 255);
 
-	*(bands + 4) = constrain(	*(bands + 4), 72, 255);
-	*(bands + 4) = map(			*(bands + 4), 72, 255, 0, 255);
+	*(bands + 4) = constrain(	*(bands + 4), maxValues[4], 1023);
+	*(bands + 4) = map(			*(bands + 4), maxValues[4], 1023, 0, 255);
 
-	*(bands + 5) = constrain(	*(bands + 5), 65, 255);
-	*(bands + 5) = map(			*(bands + 5), 65, 255, 0, 255);
+	*(bands + 5) = constrain(	*(bands + 5), maxValues[5], 1023);
+	*(bands + 5) = map(			*(bands + 5), maxValues[5], 1023, 0, 255);
 
-	*(bands + 6) = constrain(	*(bands + 6), 75, 255);
-	*(bands + 6) = map(			*(bands + 6), 75, 255, 0, 255);
-}
-
-void lpfFilter(unsigned int (&input)[7], unsigned int (&previousInput)[7])
-{
-	for(int i = 0; i < 7; i++) // current values = previous values + beta * (current input - previous values)
-	{
-		*(previousInput + i) = *(input + i); 													// get new previous value
-		*(input + i) = *(previousInput + i) + beta * (*(input + i) - *(previousInput + i)); 	// get filtered output
-	}
+	*(bands + 6) = constrain(	*(bands + 6), maxValues[6], 1023);
+	*(bands + 6) = map(			*(bands + 6), maxValues[6], 1023, 0, 255);
 }
 
 void setup()
@@ -82,6 +75,17 @@ void setup()
 
 	digitalWrite(RESET_PIN, LOW);	// do not read audio
 	digitalWrite(STROBE_PIN, HIGH);	// do not read audio
+
+	while(millis() < 5000)
+	{
+		getBandValues(currentValues);
+
+		for(int i = 0; i < 7; i++)
+		{
+			if(currentValues[i] > maxValues[i])
+				maxValues[i] = currentValues[i];
+		}
+	}
 
 	FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
 	FastLED.setBrightness(255);
@@ -101,11 +105,10 @@ void loop()
 		buttonPressedAlready = false;
 	}
 
-	if(selectionState == 0 || selectionState == 5 || selectionState == 6) // default sound reactive mode
+	if(selectionState == 0 || selectionState == 5 || selectionState == 6 || selectionState == 7 || selectionState == 8) // default sound reactive mode
 	{
 		getBandValues(currentValues);
 		calibrateBandValues(currentValues);
-		//lpfFilter(currentValues, previousValues);
 		setLEDsToAppropiateColor();
 	}
 	else if(selectionState == 1) // RED
@@ -175,28 +178,53 @@ void setLEDsToAppropiateColor()
 	}
 	else if(selectionState == 5)
 	{
-		// only update the first LED, push the previous colors to the next LED and so on
-		static unsigned int LEDtracker = 0;
-		if(LEDtracker <= 29)
+		// Every 10 LEDS do R, G, B respectively
+		for(int i = 0; i < 10; i++)
 		{
-			leds[LEDtracker++].setRGB(redColor, greenColor, blueColor);
+			leds[i].setRGB(redColor, 0, 0);
 		}
-		else 
+		for(int i = 10; i < 20; i++)
 		{
-			LEDtracker = 0;
+			leds[i].setRGB(0, 0, blueColor);
+
+		}
+		for(int i = 20; i < 30; i++)
+		{
+			leds[i].setRGB(0, greenColor, 0);
 		}
 	}
 	else if(selectionState == 6)
 	{
-		// only update the first LED, push the previous colors to the next LED and so on
-		static unsigned int LEDtracker = 0;
-		if(LEDtracker <= 29)
+		// Reactive Red only
+		for(int i = 0; i < 30; i++)
 		{
-			leds[LEDtracker++].setRGB(redColor, 0, 0);
+			leds[i].setRGB(redColor, 0, 0);
 		}
-		else 
+		// // only update the first LED, push the previous colors to the next LED and so on
+		// static unsigned int LEDtracker = 0;
+		// if(LEDtracker <= 29)
+		// {
+		// 	leds[LEDtracker++].setRGB(redColor, 0, 0);
+		// }
+		// else 
+		// {
+		// 	LEDtracker = 0;
+		// }
+	}
+	else if(selectionState == 7)
+	{
+		// Reactive Green only
+		for(int i = 0; i < 30; i++)
 		{
-			LEDtracker = 0;
+			leds[i].setRGB(0, greenColor, 0);
+		}
+	}
+	else if(selectionState == 8)
+	{
+		// Reactive Blue only
+		for(int i = 0; i < 30; i++)
+		{
+			leds[i].setRGB(0, 0, blueColor);
 		}
 	}
 
