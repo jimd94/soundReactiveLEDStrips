@@ -9,16 +9,14 @@
 #define PUSHBUTTON_SELECT_PIN		4
 #define PARSEDANALOGDATA_PIN		0
 
-#define NUMOFOPTION					9
+#define NUMOFOPTION					10
 
-const float beta = 0.3;
 unsigned int currentValues[7] = {0,0,0,0,0,0,0};
 byte selectionState = 0, redColor, greenColor, blueColor;
 bool buttonPressedAlready = false;
 CRGB leds[NUM_LEDS];		// create an object named leds
 
-unsigned long previousTime = 0;
-const long interval = 200;
+unsigned long previousTime = 0, interval = 30, incrementLED = 0;
 
 // threshold calibration variables
 unsigned int maxValues[7] = {0,0,0,0,0,0,0};
@@ -76,15 +74,33 @@ void setup()
 	digitalWrite(RESET_PIN, LOW);	// do not read audio
 	digitalWrite(STROBE_PIN, HIGH);	// do not read audio
 
-	while(millis() < 5000)
+	while(millis() < 10000)			// need to discard first 2 seconds
 	{
 		getBandValues(currentValues);
 
+		Serial.println("");
 		for(int i = 0; i < 7; i++)
 		{
+			Serial.print(currentValues[i]);
+			Serial.print("		");
 			if(currentValues[i] > maxValues[i])
 				maxValues[i] = currentValues[i];
 		}
+
+		if(millis() > 3000 && millis() < 3001)	// discard first 3 seconds of initial readings
+		{
+			for(int i = 0; i < 7; i++)
+			{
+				maxValues[i] = 0;
+			}
+		}
+	}
+
+	Serial.println("Max Values (Min Threshold)");
+	for(int i = 0; i < 7; i++)
+	{
+		Serial.print(maxValues[i]);
+		Serial.print("		");
 	}
 
 	FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
@@ -105,7 +121,7 @@ void loop()
 		buttonPressedAlready = false;
 	}
 
-	if(selectionState == 0 || selectionState == 5 || selectionState == 6 || selectionState == 7 || selectionState == 8) // default sound reactive mode
+	if(selectionState == 0 || selectionState == 5 || selectionState == 6 || selectionState == 7 || selectionState == 8 || selectionState == 9) // default sound reactive mode
 	{
 		getBandValues(currentValues);
 		calibrateBandValues(currentValues);
@@ -163,15 +179,15 @@ void setLEDsToAppropiateColor()
 	if(selectionState == 0)
 	{
 		// Nice RGB rainbow mode
-		for(int i = 0; i < 30; i+=3)
+		for(int i = 0; i < NUM_LEDS; i+=3)
 		{
 			leds[i].setRGB(redColor, 0, 0);
 		}
-		for(int i = 1; i < 30; i+=3)
+		for(int i = 1; i < NUM_LEDS; i+=3)
 		{
 			leds[i].setRGB(0, greenColor, 0);
 		}
-		for(int i = 2; i < 30; i+=3)
+		for(int i = 2; i < NUM_LEDS; i+=3)
 		{
 			leds[i].setRGB(0, 0, blueColor);
 		}
@@ -188,7 +204,7 @@ void setLEDsToAppropiateColor()
 			leds[i].setRGB(0, 0, blueColor);
 
 		}
-		for(int i = 20; i < 30; i++)
+		for(int i = 20; i < NUM_LEDS; i++)
 		{
 			leds[i].setRGB(0, greenColor, 0);
 		}
@@ -196,7 +212,7 @@ void setLEDsToAppropiateColor()
 	else if(selectionState == 6)
 	{
 		// Reactive Red only
-		for(int i = 0; i < 30; i++)
+		for(int i = 0; i < NUM_LEDS; i++)
 		{
 			leds[i].setRGB(redColor, 0, 0);
 		}
@@ -214,7 +230,7 @@ void setLEDsToAppropiateColor()
 	else if(selectionState == 7)
 	{
 		// Reactive Green only
-		for(int i = 0; i < 30; i++)
+		for(int i = 0; i < NUM_LEDS; i++)
 		{
 			leds[i].setRGB(0, greenColor, 0);
 		}
@@ -222,16 +238,36 @@ void setLEDsToAppropiateColor()
 	else if(selectionState == 8)
 	{
 		// Reactive Blue only
-		for(int i = 0; i < 30; i++)
+		for(int i = 0; i < NUM_LEDS; i++)
 		{
 			leds[i].setRGB(0, 0, blueColor);
 		}
 	}
+	else if(selectionState == 9)
+	{
+			unsigned long currentTime = millis();
+			if(currentTime - previousTime >= interval)
+			{
+				leds[incrementLED].setRGB(redColor,greenColor, blueColor);
+				previousTime = currentTime;
+				incrementLED++;
+				if(incrementLED > NUM_LEDS - 1)
+					incrementLED = 0;
+			}
+	}
 
-	Serial.print("R: ");
-	Serial.print(redColor);
-	Serial.print("		G: ");
-	Serial.print(greenColor);
-	Serial.print("		B: ");
-	Serial.println(blueColor);
+	if(redColor < 75 && greenColor < 30 && blueColor < 30)
+	{
+		for(int i = 0; i < NUM_LEDS; i++)
+			leds[i] = CRGB::Black;
+	}
+
+
+	// Serial.print("R: ");
+	// Serial.print(redColor);
+	// Serial.print("		G: ");
+	// Serial.print(greenColor);
+	// Serial.print("		B: ");
+	// Serial.println(blueColor);
 }
+
